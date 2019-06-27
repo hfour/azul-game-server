@@ -178,7 +178,7 @@ console.log('http://localhost:8080')
 setInterval(() => {
     games.games.forEach(game => {
         if (game.status === 'finished') {
-            return;
+            return; // ignore finished games
         }
         else if ((game.status === 'created' || game.status === 'ready') && games.getSecondsSinceCreated(game.id) > END_CREATED_GAMES_AFTER_SECONDS) {
             games.endGame(game.id, 'Automatically ended game because no one started it for too long.');
