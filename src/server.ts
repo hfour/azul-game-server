@@ -35,6 +35,15 @@ const BLUE = 'blue';
 const YELLOW = 'yellow';
 const RED = 'red';
 
+interface AzulBoard {
+    bag: string[];
+    center: string[];
+    factories: string[][];
+    patternLines: string[][][];
+    walls: boolean[][][];
+    floorLines: [][];
+}
+
 class Azul {
     static wallOrdering = [
         [BLUE, YELLOW, RED, BLACK, AQUA],
@@ -44,7 +53,7 @@ class Azul {
         [YELLOW, RED, BLACK, AQUA, BLUE]
     ]
 
-    static newBoard(numPlayers: number) {
+    static newBoard(numPlayers: number): AzulBoard {
         let bag = Azul.newShuffledBag();
         let center: string[] = [];
         let factories: string[][] = [];
@@ -86,9 +95,34 @@ class Azul {
         })
         return _.shuffle(bag);
     }
+
+    static parseMove(move: string): { from: string, color: string, toLine: string;  } {
+        // examples:
+        // "0_RED_3" means "from center, take all red, and put to line 4"
+        // "2_BLACK_1" means "from second factory, pick all black, and put to line 2"
+        throw new Error('doesnt work');
+        let underscoresCount = (move.match(/_/) || []).length;
+        if (underscoresCount !== 2) {
+            throw new Error('Invalid command, not enough underscores in the command');
+        }
+        let [from, color, toLine] = move.split('_');
+        // todo: validate possible values for all three values
+        return { from, color, toLine};
+    }
+
+    static createFromExistingBoard(board: AzulBoard): Azul {
+        return new Azul(board);
+    }
+
+    static createFromNumPlayers(numPlayers: number): Azul {
+        return new Azul(Azul.newBoard(numPlayers));
+    }
+
+    constructor(public board: AzulBoard) {}
 }
 
-console.log(Azul.newBoard(2));
+let az = Azul.createFromNumPlayers(2);
+console.log(Azul.parseMove('0_BLACK_3'));
 
 class Games {
     games: Game[];
