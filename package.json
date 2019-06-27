@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "start": "yarn build && node build/server.js"
+    "start": "yarn build && node-dev build/server.js"
   },
   "devDependencies": {
     "node-dev": "^4.0.0"
