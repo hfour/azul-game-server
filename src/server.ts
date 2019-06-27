@@ -28,6 +28,68 @@ function now() {
     return new Date();
 }
 
+// Tile colors
+const BLACK = 'black';
+const AQUA = 'aqua';
+const BLUE = 'blue';
+const YELLOW = 'yellow';
+const RED = 'red';
+
+class Azul {
+    static wallOrdering = [
+        [BLUE, YELLOW, RED, BLACK, AQUA],
+        [AQUA, BLUE, YELLOW, RED, BLACK],
+        [BLACK, AQUA, BLUE, YELLOW, RED],
+        [RED, BLACK, AQUA, BLUE, YELLOW],
+        [YELLOW, RED, BLACK, AQUA, BLUE]
+    ]
+
+    static newBoard(numPlayers: number) {
+        let bag = Azul.newShuffledBag();
+        let center: string[] = [];
+        let factories: string[][] = [];
+        let takeNFromBag = (n: number) => bag.splice(0, n); // destructive (has side-effects), be careful
+        if (numPlayers === 2) {
+            factories = _.times(5, () => takeNFromBag(4));
+        } else if (numPlayers === 3) {
+            factories = _.times(7, () => takeNFromBag(4));
+        } else if (numPlayers === 4) {
+            factories = _.times(9, () => takeNFromBag(4));
+        } else {
+            throw new Error('Number of players is not between 2 and 4; this should never happen.')
+        }
+        let patternLines: Array<string[][]> = []; // i know i know..
+        _.times(numPlayers, () => {
+            let linesForOnePlayer = [[], [], [], [], []]; // leftmost is the line with 1 tile; rightmost with 5
+            patternLines.push(linesForOnePlayer);
+        })
+        let walls: Array<boolean[][]> = [];
+        _.times(numPlayers, () => {
+            walls.push([
+                [false, false, false, false, false],
+                [false, false, false, false, false],
+                [false, false, false, false, false],
+                [false, false, false, false, false],
+                [false, false, false, false, false]
+            ])
+        })
+        let floorLines: Array<[]> =_.times(numPlayers, () => [])
+        return {
+            bag, center, factories, patternLines, walls, floorLines
+        }
+    }
+
+    static newShuffledBag() {
+        let bag: string[] = []
+        _.times(20, () => {
+            bag = bag.concat([BLACK, AQUA, BLUE, YELLOW, RED])
+        })
+        return _.shuffle(bag);
+    }
+}
+
+console.log(Azul.newBoard(2));
+
 class Games {
     games: Game[];
 
