@@ -24,6 +24,10 @@ function timeDiffSeconds(t1: Date, t2: Date) {
     return (t2.getTime() - t1.getTime()) / 1000;
 }
 
+function now() {
+    return new Date();
+}
+
 class Games {
     games: Game[];
 
@@ -60,7 +64,7 @@ class Games {
 
     getSecondsSinceCreated(gameId: string) {
         let game = this.findGame(gameId);
-        return ((new Date()).getTime() - (new Date(game.createdAt)).getTime()) / 1000;
+        return timeDiffSeconds(now(), new Date(game.createdAt));
     }
 
     getSecondsSinceLastMove(gameId: string) {
@@ -69,7 +73,7 @@ class Games {
             return null;
         }
         let lastMoveTimestamp = new Date(game.moves[game.moves.length - 1].timestamp);
-        return ((new Date()).getTime() - lastMoveTimestamp.getTime()) / 1000;
+        return timeDiffSeconds(now(), new Date(lastMoveTimestamp))
     }
 
     private ensureGameNotStale(gameId: string) {
