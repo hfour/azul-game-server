@@ -1,0 +1,25 @@
+{
+  "name": "azul-game-server",
+  "version": "1.0.0",
+  "description": "lets ais and cli-savvy people play azul",
+  "main": "build/index.js",
+  "author": "Andrej T. / Dushko J.",
+  "license": "MIT",
+  "dependencies": {
+    "@types/express": "^4.17.0",
+    "@types/lodash": "^4.14.135",
+    "@types/uuid": "^3.4.4",
+    "express": "^4.17.1",
+    "lodash": "^4.17.11",
+    "typescript": "^3.5.2",
+    "uuid": "^3.3.2"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "yarn build && node build/server.js"
+  },
+  "devDependencies": {
+    "node-dev": "^4.0.0"
+  }
+}
