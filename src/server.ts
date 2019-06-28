@@ -44,6 +44,8 @@ interface AzulBoard {
     floorLines: [][];
 }
 
+interface GrabPlaceMove { from: number, color: string, toLine: number;  }
+
 class Azul {
     static wallOrdering = [
         [BLUE, YELLOW, RED, BLACK, AQUA],
@@ -96,7 +98,7 @@ class Azul {
         return _.shuffle(bag);
     }
 
-    static parseMove(move: string): { from: number, color: string, toLine: number;  } {
+    static parseMove(move: string): GrabPlaceMove {
         // examples:
         // "0_RED_3" means "from center, take all red, and put to line 4"
         // "2_BLACK_1" means "from second factory, pick all black, and put to line 2"
@@ -150,6 +152,10 @@ class Games {
 
     list() {
         return this.games;
+    }
+
+    get(gameId: string) {
+        return this.findGame(gameId);
     }
 
     create() {
@@ -266,6 +272,10 @@ app.get('/games', (_req, res) => {
 
 app.get('/games/create', (_req, res) => {
     res.json(games.create())
+})
+
+app.get('/games/:gameId', (req, res) => {
+    res.json(games.get(getGameId(req)));
 })
 
 app.get('/games/:gameId/join', (req, res) => {
