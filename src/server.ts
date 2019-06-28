@@ -29,11 +29,11 @@ function now() {
 }
 
 // Tile colors
-const BLACK = 'black';
-const AQUA = 'aqua';
-const BLUE = 'blue';
-const YELLOW = 'yellow';
-const RED = 'red';
+const BLACK = 'BLACK';
+const AQUA = 'AQUA';
+const BLUE = 'BLUE';
+const YELLOW = 'YELLOW';
+const RED = 'RED';
 
 interface AzulBoard {
     bag: string[];
@@ -96,18 +96,29 @@ class Azul {
         return _.shuffle(bag);
     }
 
-    static parseMove(move: string): { from: string, color: string, toLine: string;  } {
+    static parseMove(move: string): { from: number, color: string, toLine: number;  } {
         // examples:
         // "0_RED_3" means "from center, take all red, and put to line 4"
         // "2_BLACK_1" means "from second factory, pick all black, and put to line 2"
-        throw new Error('doesnt work');
-        let underscoresCount = (move.match(/_/) || []).length;
+        let underscoresCount = (move.match(/_/g) || []).length;
         if (underscoresCount !== 2) {
-            throw new Error('Invalid command, not enough underscores in the command');
+            throw new Error(`Parsing move error: command should contain exactly 2 underscores, counted ${underscoresCount}.`);
         }
         let [from, color, toLine] = move.split('_');
+        color = color.toUpperCase();
+        let fromN = Number.parseInt(from, 10);
+        let toLineN = Number.parseInt(toLine, 10);
+        if (!_.range(0, 10).includes(fromN)) {
+            throw new Error(`Parsing move error: from -> "${from}" is not a number between 0 and 9.`);
+        }
+        if (![BLACK, AQUA, BLUE, YELLOW, RED].includes(color)) {
+            throw new Error(`Parsing move error: color -> "${color}" is not one of ${BLACK}, ${AQUA}, ${BLUE}, ${YELLOW} or ${RED}.`);
+        }
+        if (!_.range(0, 5).includes(toLineN)) {
+            throw new Error(`Parsing move error: toLine -> "${toLine}" is not a number between 0 and 4.`);
+        }
         // todo: validate possible values for all three values
-        return { from, color, toLine};
+        return { from: fromN, color, toLine: toLineN };
     }
 
     static createFromExistingBoard(board: AzulBoard): Azul {
@@ -122,7 +133,7 @@ class Azul {
 }
 
 let az = Azul.createFromNumPlayers(2);
-console.log(Azul.parseMove('0_BLACK_3'));
+console.log(Azul.parseMove('0_BLACK_4'));
 
 class Games {
     games: Game[];
