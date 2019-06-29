@@ -16,6 +16,7 @@ interface Game {
 }
 
 const GAMES_DATA_LOCATION = path.join(__dirname, '../data/games.json'); // up, out of the build folder
+const USERS_DATA_LOCATION = path.join(__dirname, '../data/users.json');
 const TIME_PER_MOVE = 30;
 const END_STARTED_STALE_GAMES_AFTER_SECONDS = 60;
 const END_CREATED_GAMES_AFTER_SECONDS = 60; // more?
@@ -241,12 +242,48 @@ class Games {
     }
 }
 
-let games = new Games();
+interface UsersData { [id: string]: { id: string, email: string; } }
 
-function getUserId(req: express.Request): string {
-    let userId = req.query.userId;
-    if (!userId) throw new Error("No used id provided")
-    return userId as string;
+class Users {
+    private users: UsersData = {}
+
+    constructor() {
+        try {
+            this.users = JSON.parse(fs.readFileSync(USERS_DATA_LOCATION, 'utf-8')) as UsersData;
+        } catch (e) {
+            console.error(e);
+            console.warn('Could not load users state; initialzing an empty object.')
+            this.users = {}
+        }
+    }
+
+    save() {
+        fs.writeFileSync(USERS_DATA_LOCATION, JSON.stringify(this.users))
+    }
+
+    register(email: string) {
+        let id = uuid();
+        let secret = uuid();
+        this.users[secret] = { id, email };
+        this.save();
+        return { id, secret, email };
+    }
+
+    getUser(secret: string) {
+        if (!this.users[secret]) {
+            throw new Error('User not found.')
+        }
+        return this.users[secret];
+    }
+}
+
+let games = new Games();
+let users = new Users();
+
+function getUser(req: express.Request) {
+    let secret = req.query.secret || req.headers['x-secret'];
+    if (!secret) throw new Error("No used id provided")
+    return users.getUser(secret);
 }
 
 function getGameId(req: express.Request): string {
@@ -278,18 +315,29 @@ app.get('/games/:gameId', (req, res) => {
 })
 
 app.get('/games/:gameId/join', (req, res) => {
-    let userId = getUserId(req);
+    let user = getUser(req);
     let gameId = getGameId(req);
-    let game = games.joinGame(gameId, userId);
+    let game = games.joinGame(gameId, user.id);
     res.json(game);
 })
 
 app.get('/games/:gameId/move/:move', (req, res) => {
-    let userId = getUserId(req);
+    let user = getUser(req);
     let gameId = getGameId(req);
     let move = getMove(req);
-    let game = games.makeMove(gameId, userId, move);
-    return res.json(game);
+    let game = games.makeMove(gameId, user.id, move);
+    res.json(game);
+})
+
+app.get('/register', (req, res) => {
+    let email = req.query.email;
+    let user = users.register(email); // includes secret
+    res.json(user);
+})
+
+app.get('/whoami', (req, res) => {
+    let user = getUser(req);
+    res.json(user);
 })
 
 app.listen(8080)
