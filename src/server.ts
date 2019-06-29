@@ -177,7 +177,7 @@ class Games {
 
     getSecondsSinceCreated(gameId: string) {
         let game = this.findGame(gameId);
-        return timeDiffSeconds(now(), new Date(game.createdAt));
+        return timeDiffSeconds(new Date(game.createdAt), now());
     }
 
     getSecondsSinceLastMove(gameId: string) {
@@ -186,7 +186,7 @@ class Games {
             return null;
         }
         let lastMoveTimestamp = new Date(game.moves[game.moves.length - 1].timestamp);
-        return timeDiffSeconds(now(), new Date(lastMoveTimestamp))
+        return timeDiffSeconds(new Date(lastMoveTimestamp), now())
     }
 
     private ensureGameNotStale(gameId: string) {
@@ -262,8 +262,7 @@ function getMove(req: express.Request): string {
 }
 
 app.get('/', (req, res) => {
-    let userId = getUserId(req);
-    res.end('User id: ' + userId);
+    res.redirect('/games');
 });
 
 app.get('/games', (_req, res) => {
