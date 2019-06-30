@@ -40,6 +40,7 @@ type TILE_COLOR = 'BLACK' | 'AQUA' | 'BLUE' | 'YELLOW' | 'RED';
 
 interface AzulGameState {
     currentPlayerIndex: number;
+    numberOfPlayers: number;
     bag: string[]; // todo: change types to LINE_COLOR
     center: string[];
     factories: string[][];
@@ -60,27 +61,17 @@ class Azul {
         [YELLOW, RED, BLACK, AQUA, BLUE]
     ]
 
-    static newBoard(numPlayers: number): AzulGameState {
+    static newBoard(numberOfPlayers: number): AzulGameState {
         let bag = Azul.newShuffledBag();
         let center: string[] = [];
         let factories: string[][] = [];
-        let takeNFromBag = (n: number) => bag.splice(0, n); // destructive (has side-effects), be careful
-        if (numPlayers === 2) {
-            factories = _.times(5, () => takeNFromBag(4));
-        } else if (numPlayers === 3) {
-            factories = _.times(7, () => takeNFromBag(4));
-        } else if (numPlayers === 4) {
-            factories = _.times(9, () => takeNFromBag(4));
-        } else {
-            throw new Error('Number of players is not between 2 and 4; this should never happen.')
-        }
         let patternLines: Array<string[][]> = []; // i know i know..
-        _.times(numPlayers, () => {
+        _.times(numberOfPlayers, () => {
             let linesForOnePlayer = [[], [], [], [], []]; // leftmost is the line with 1 tile; rightmost with 5
             patternLines.push(linesForOnePlayer);
         })
         let walls: Array<boolean[][]> = [];
-        _.times(numPlayers, () => {
+        _.times(numberOfPlayers, () => {
             walls.push([
                 [false, false, false, false, false],
                 [false, false, false, false, false],
@@ -89,9 +80,9 @@ class Azul {
                 [false, false, false, false, false]
             ])
         })
-        let floorLines: Array<[]> =_.times(numPlayers, () => [])
+        let floorLines: Array<[]> =_.times(numberOfPlayers, () => [])
         return {
-            currentPlayerIndex: 0, bag, center, factories, patternLines, walls, floorLines, discardPile: []
+            currentPlayerIndex: 0, numberOfPlayers, bag, center, factories, patternLines, walls, floorLines, discardPile: []
         }
     }
 
@@ -133,7 +124,9 @@ class Azul {
     }
 
     static createFromNumPlayers(numPlayers: number): Azul {
-        return new Azul(Azul.newBoard(numPlayers));
+        let game = new Azul(Azul.newBoard(numPlayers));
+        game.repopulateFactories();
+        return game;
     }
 
     static colorAtWallCoordinates(row: number, column: number) {
@@ -141,6 +134,24 @@ class Azul {
     }
 
     constructor(public state: AzulGameState) {}
+
+    private repopulateFactories() {
+        this.state.factories.forEach(factory => {
+            if (factory.length) throw new Error("Can't repopulate factories before they're empty.");
+        })
+        let bag = this.state.bag;
+        let numPlayers = this.state.numberOfPlayers;
+        let takeNFromBag = (n: number) => bag.splice(0, n); // destructive (has side-effects), be careful
+        if (numPlayers === 2) {
+            this.state.factories = _.times(5, () => takeNFromBag(4));
+        } else if (numPlayers === 3) {
+            this.state.factories = _.times(7, () => takeNFromBag(4));
+        } else if (numPlayers === 4) {
+            this.state.factories = _.times(9, () => takeNFromBag(4));
+        } else {
+            throw new Error('Number of players is not between 2 and 4; this should never happen.')
+        }
+    }
 
     private encureCanPlaceOnPatternLine(lineIndex: number, color: TILE_COLOR, numOfTiles: number, ) {
         let playerIndex = this.state.currentPlayerIndex;
@@ -184,7 +195,8 @@ class Azul {
         if (pileIndex === 0) {
             this.state.center = pileAfterPick;
         } else {
-            this.state.factories[factoryIndex] = pileAfterPick;
+            this.state.factories[factoryIndex] = [];
+            this.state.center = this.state.center.concat(pileAfterPick);
         }
         // mutate pattern line
         let line = _.clone(this.state.patternLines[this.state.currentPlayerIndex][lineIndex]);
@@ -216,11 +228,12 @@ class Azul {
 }
 
 let az = Azul.createFromNumPlayers(2);
-let move = Azul.parseMove('1_BLACK_4');
+let move = Azul.parseMove('2_BLACK_0');
 az.pickTiles(move.from, move.toLine, move.color);
+az.moveTilesToWall();
 console.log(az.state.patternLines)
 console.log(az.state.factories);
-
+console.log(az.state.center);
 
 class Games {
     games: Game[];
