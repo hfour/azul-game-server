@@ -46,6 +46,7 @@ interface AzulGameState {
     patternLines: string[][][];
     walls: boolean[][][];
     floorLines: [][];
+    discardPile: string[];
 }
 
 interface GrabPlaceMove { from: number, color: TILE_COLOR, toLine: number;  }
@@ -90,7 +91,7 @@ class Azul {
         })
         let floorLines: Array<[]> =_.times(numPlayers, () => [])
         return {
-            currentPlayerIndex: 0, bag, center, factories, patternLines, walls, floorLines
+            currentPlayerIndex: 0, bag, center, factories, patternLines, walls, floorLines, discardPile: []
         }
     }
 
@@ -135,6 +136,10 @@ class Azul {
         return new Azul(Azul.newBoard(numPlayers));
     }
 
+    static colorAtWallCoordinates(row: number, column: number) {
+        return this.wallOrdering[row][column];
+    }
+
     constructor(public state: AzulGameState) {}
 
     private encureCanPlaceOnPatternLine(lineIndex: number, color: TILE_COLOR, numOfTiles: number, ) {
@@ -148,6 +153,12 @@ class Azul {
         let lineIsEmpty = patternLineSize === numFreeSpaces;
         if (!lineIsEmpty && !_.includes(line, color)) {
             throw new Error('There is already a tile of different color in the line.')
+        }
+        let wallHorizontalLine = this.state.walls[playerIndex];
+        for (let column = 0; column < 5; column++) {
+            if (wallHorizontalLine[lineIndex][column] === true && Azul.colorAtWallCoordinates(lineIndex, column) === color) {
+                throw new Error('There is already a tile with the same color on the wall.')
+            }
         }
     }
 
@@ -179,6 +190,28 @@ class Azul {
         let line = _.clone(this.state.patternLines[this.state.currentPlayerIndex][lineIndex]);
         line = line.concat(pickedTiles);
         this.state.patternLines[this.state.currentPlayerIndex][lineIndex] = line;
+
+        // todo: handle overflows -- move tiles into the floor line
+    }
+
+    moveTilesToWall() {
+        let currentPlayerIndex = this.state.currentPlayerIndex;
+        let playerPatternLines = _.cloneDeep(this.state.patternLines[currentPlayerIndex]);
+        let playerWall = _.cloneDeep(this.state.walls[currentPlayerIndex])
+        playerPatternLines.forEach((line, lineIndex) => {
+            // full row, ready to be moved
+            if (line.length === lineIndex + 1) {
+                let oneTile = line.pop() as string; // we know there's at least one tile at this point
+                Azul.wallOrdering[lineIndex].forEach((color, column) => {
+                    if (color === oneTile) {
+                        playerWall[lineIndex][column] = true;
+                    }
+                })
+
+                playerPatternLines[lineIndex] = []
+                line.forEach(tile => this.state.discardPile.push(tile));
+            }
+        })
     }
 }
 
@@ -186,6 +219,8 @@ let az = Azul.createFromNumPlayers(2);
 let move = Azul.parseMove('1_BLACK_4');
 az.pickTiles(move.from, move.toLine, move.color);
 console.log(az.state.patternLines)
+console.log(az.state.factories);
+
 
 class Games {
     games: Game[];
