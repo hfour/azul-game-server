@@ -13,6 +13,7 @@ interface Game {
     playerIds: string[];
     moves: { timestamp: Date, move: string }[];
     events: string[]
+    state: AzulGameState;
 }
 
 const GAMES_DATA_LOCATION = path.join(__dirname, '../data/games.json'); // up, out of the build folder
@@ -205,17 +206,15 @@ class Azul {
             else pileAfterPick.push(tile);
         })
         this.encureCanPlaceOnPatternLine(lineIndex, color);
-        let numFreeSpaces = this.numFreeSpacesOnPatternLine(lineIndex);
         let cpi = this.state.currentPlayerIndex;
 
-        for (let i = 0; i < numFreeSpaces; i++) {
-            let oneTile = pickedTiles.pop();
-            if (!oneTile) throw new Error('This should never happen.'); // typechecked gymnastics
-            this.state.patternLines[cpi][lineIndex].push(oneTile);
-        }
-
-        // todo: ensure that no more than N tiles go on the floor line
-        this.state.floorLines[cpi] = this.state.floorLines[cpi].concat(pickedTiles); // rest of tiles go on the floor
+        pickedTiles.forEach(tile => {
+            if (this.numFreeSpacesOnPatternLine(lineIndex)) {
+                this.state.patternLines[cpi][lineIndex].push(tile);
+            } else {
+                this.state.floorLines[cpi].push(tile);
+            }
+        })
 
         // mutate center or factory
         if (pileIndex === 0) {
@@ -240,22 +239,25 @@ class Azul {
     }
 
     private moveTilesToWall() {
-        let currentPlayerIndex = this.state.currentPlayerIndex;
-        let playerPatternLines = _.cloneDeep(this.state.patternLines[currentPlayerIndex]);
-        let playerWall = _.cloneDeep(this.state.walls[currentPlayerIndex])
-        playerPatternLines.forEach((line, lineIndex) => {
-            // full row, ready to be moved
-            if (line.length === Azul.patternLineSize(lineIndex)) {
-                let oneTile = line.pop() as string; // we know there's at least one tile at this point
-                Azul.wallOrdering[lineIndex].forEach((color, column) => {
-                    if (color === oneTile) {
-                        playerWall[lineIndex][column] = true;
-                    }
-                })
-                playerPatternLines[lineIndex] = []
-                line.forEach(tile => this.state.discardPile.push(tile));
-            }
-        })
+        for (let playerIndex = 0; playerIndex < this.state.numberOfPlayers; playerIndex++) {
+            let playerPatternLines = _.cloneDeep(this.state.patternLines[playerIndex]);
+            let playerWall = _.cloneDeep(this.state.walls[playerIndex])
+            playerPatternLines.forEach((line, lineIndex) => {
+                // full row, ready to be moved
+                if (line.length === Azul.patternLineSize(lineIndex)) {
+                    let oneTile = line.pop() as string; // we know there's at least one tile at this point
+                    Azul.wallOrdering[lineIndex].forEach((color, column) => {
+                        if (color === oneTile) {
+                            playerWall[lineIndex][column] = true;
+                        }
+                    })
+                    playerPatternLines[lineIndex] = []
+                    line.forEach(tile => this.state.discardPile.push(tile));
+                }
+            })
+            this.state.patternLines[playerIndex] = playerPatternLines;
+            this.state.walls[playerIndex] = playerWall;
+        }
     }
 
     private shouldEnd() {
@@ -278,12 +280,6 @@ class Azul {
         this.pickTiles(move.from, move.toLine, move.color);
     }
 }
-
-let az = Azul.createFromNumPlayers(2);
-let move = Azul.parseMove('2_BLACK_0');
-az.do('2_BLACK_0');
-console.log(az.state);
-
 
 class Games {
     games: Game[];
@@ -308,7 +304,7 @@ class Games {
 
     create() {
         let id = uuid();
-        let game: Game = { id, status: 'created', playerIds: [], createdAt: new Date(), moves: [], events:[] };
+        let game: Game = { id, status: 'created', playerIds: [], createdAt: new Date(), moves: [], events:[], state: Azul.createFromNumPlayers(2).state };
         game.events.push('Game created.');
         this.games.push(game)
         this.save();
@@ -357,6 +353,12 @@ class Games {
         if (game.playerIds.length === 4) {
             throw new Error('Game is full.');
         }
+        if (game.status === 'finished') {
+            throw new Error('Game has finished.')
+        }
+        if (game.status === 'started') {
+            throw new Error('Game has started.');
+        }
         game.playerIds.push(playerId);
         game.status = 'ready';
         game.events.push(`Player "${playerId}" joined game.`);
@@ -372,7 +374,10 @@ class Games {
         }
         if (game.status === 'ready') game.status = 'started';
         game.moves.push({ timestamp: new Date(), move });
-        game.events.push(`Player "${playerId}" played move "${move}".`);
+        game.events.push(`Player "${playerId}" played move: ${move}.`);
+        let azul = Azul.createFromExistingBoard(game.state);
+        azul.do(move);
+        game.state = azul.state;
         this.save();
         return game;
     }
