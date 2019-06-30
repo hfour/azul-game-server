@@ -17,8 +17,8 @@ interface Game {
 
 const GAMES_DATA_LOCATION = path.join(__dirname, '../data/games.json'); // up, out of the build folder
 const USERS_DATA_LOCATION = path.join(__dirname, '../data/users.json');
-const TIME_PER_MOVE = 30;
-const END_STARTED_STALE_GAMES_AFTER_SECONDS = 60;
+const TIME_PER_MOVE = 60;
+const END_STARTED_STALE_GAMES_AFTER_SECONDS = 120;
 const END_CREATED_GAMES_AFTER_SECONDS = 60; // more?
 
 function timeDiffSeconds(t1: Date, t2: Date) {
@@ -41,12 +41,13 @@ type TILE_COLOR = 'BLACK' | 'AQUA' | 'BLUE' | 'YELLOW' | 'RED';
 interface AzulGameState {
     currentPlayerIndex: number;
     numberOfPlayers: number;
+    startingPlayer: number;
     bag: string[]; // todo: change types to LINE_COLOR
     center: string[];
     factories: string[][];
     patternLines: string[][][];
     walls: boolean[][][];
-    floorLines: [][];
+    floorLines: string[][];
     discardPile: string[];
 }
 
@@ -60,6 +61,8 @@ class Azul {
         [RED, BLACK, AQUA, BLUE, YELLOW],
         [YELLOW, RED, BLACK, AQUA, BLUE]
     ]
+
+    static patternLineSize(lineIndex: number) { return lineIndex + 1; }
 
     static newBoard(numberOfPlayers: number): AzulGameState {
         let bag = Azul.newShuffledBag();
@@ -82,7 +85,7 @@ class Azul {
         })
         let floorLines: Array<[]> =_.times(numberOfPlayers, () => [])
         return {
-            currentPlayerIndex: 0, numberOfPlayers, bag, center, factories, patternLines, walls, floorLines, discardPile: []
+            currentPlayerIndex: 0, numberOfPlayers, startingPlayer: 0, bag, center, factories, patternLines, walls, floorLines, discardPile: []
         }
     }
 
@@ -106,7 +109,7 @@ class Azul {
         color = color.toUpperCase();
         let fromN = Number.parseInt(from, 10);
         let toLineN = Number.parseInt(toLine, 10);
-        if (!_.range(0, 10).includes(fromN)) {
+        if (!_.range(0, 10).includes(fromN)) { // todo: base this number on number of players
             throw new Error(`Parsing move error: from -> "${from}" is not a number between 0 and 9.`);
         }
         if (![BLACK, AQUA, BLUE, YELLOW, RED].includes(color as TILE_COLOR)) {
@@ -115,7 +118,6 @@ class Azul {
         if (!_.range(0, 5).includes(toLineN)) {
             throw new Error(`Parsing move error: toLine -> "${toLine}" is not a number between 0 and 4.`);
         }
-        // todo: validate possible values for all three values
         return { from: fromN, color: color as TILE_COLOR, toLine: toLineN };
     }
 
@@ -136,9 +138,9 @@ class Azul {
     constructor(public state: AzulGameState) {}
 
     private repopulateFactories() {
-        this.state.factories.forEach(factory => {
-            if (factory.length) throw new Error("Can't repopulate factories before they're empty.");
-        })
+        if (!this.allPilesAreEmpty()) {
+            throw new Error("Can't repopulate factories before they're empty.");
+        }
         let bag = this.state.bag;
         let numPlayers = this.state.numberOfPlayers;
         let takeNFromBag = (n: number) => bag.splice(0, n); // destructive (has side-effects), be careful
@@ -153,14 +155,11 @@ class Azul {
         }
     }
 
-    private encureCanPlaceOnPatternLine(lineIndex: number, color: TILE_COLOR, numOfTiles: number, ) {
+    private encureCanPlaceOnPatternLine(lineIndex: number, color: TILE_COLOR) {
         let playerIndex = this.state.currentPlayerIndex;
         let patternLineSize = lineIndex + 1;
         let line = this.state.patternLines[playerIndex][lineIndex]
         let numFreeSpaces = patternLineSize - line.length;
-        if (numOfTiles > numFreeSpaces) {
-            throw new Error("There isn't enough free space on the line.");
-        }
         let lineIsEmpty = patternLineSize === numFreeSpaces;
         if (!lineIsEmpty && !_.includes(line, color)) {
             throw new Error('There is already a tile of different color in the line.')
@@ -173,7 +172,22 @@ class Azul {
         }
     }
 
-    pickTiles(pileIndex: number, lineIndex: number, color: TILE_COLOR) {
+    private allPilesAreEmpty() {
+        if (this.state.center.length) {
+            return false;
+        }
+        for (let f of this.state.factories) {
+            if (f.length) return false;
+        }
+        return true;
+    }
+
+    private numFreeSpacesOnPatternLine(lineIndex: number) {
+        let playerPatternLines = this.state.patternLines[this.state.currentPlayerIndex];
+        return Azul.patternLineSize(lineIndex) - playerPatternLines[lineIndex].length;
+    }
+
+    private pickTiles(pileIndex: number, lineIndex: number, color: TILE_COLOR) {
         let pile: string[];
         let factoryIndex = pileIndex - 1;
         if (pileIndex === 0) {
@@ -190,7 +204,19 @@ class Azul {
             if (tile === color) pickedTiles.push(tile);
             else pileAfterPick.push(tile);
         })
-        this.encureCanPlaceOnPatternLine(lineIndex, color, pickedTiles.length);
+        this.encureCanPlaceOnPatternLine(lineIndex, color);
+        let numFreeSpaces = this.numFreeSpacesOnPatternLine(lineIndex);
+        let cpi = this.state.currentPlayerIndex;
+
+        for (let i = 0; i < numFreeSpaces; i++) {
+            let oneTile = pickedTiles.pop();
+            if (!oneTile) throw new Error('This should never happen.'); // typechecked gymnastics
+            this.state.patternLines[cpi][lineIndex].push(oneTile);
+        }
+
+        // todo: ensure that no more than N tiles go on the floor line
+        this.state.floorLines[cpi] = this.state.floorLines[cpi].concat(pickedTiles); // rest of tiles go on the floor
+
         // mutate center or factory
         if (pileIndex === 0) {
             this.state.center = pileAfterPick;
@@ -198,42 +224,66 @@ class Azul {
             this.state.factories[factoryIndex] = [];
             this.state.center = this.state.center.concat(pileAfterPick);
         }
-        // mutate pattern line
-        let line = _.clone(this.state.patternLines[this.state.currentPlayerIndex][lineIndex]);
-        line = line.concat(pickedTiles);
-        this.state.patternLines[this.state.currentPlayerIndex][lineIndex] = line;
 
-        // todo: handle overflows -- move tiles into the floor line
+        // end of turn:
+        if (this.allPilesAreEmpty()) {
+            this.moveTilesToWall();
+            if (this.shouldEnd()) {
+                this.end()
+            } else {
+                this.repopulateFactories();
+                this.state.currentPlayerIndex = this.state.startingPlayer;
+            }
+        } else {
+            this.state.currentPlayerIndex = (this.state.currentPlayerIndex + 1) % this.state.numberOfPlayers;
+        }        
     }
 
-    moveTilesToWall() {
+    private moveTilesToWall() {
         let currentPlayerIndex = this.state.currentPlayerIndex;
         let playerPatternLines = _.cloneDeep(this.state.patternLines[currentPlayerIndex]);
         let playerWall = _.cloneDeep(this.state.walls[currentPlayerIndex])
         playerPatternLines.forEach((line, lineIndex) => {
             // full row, ready to be moved
-            if (line.length === lineIndex + 1) {
+            if (line.length === Azul.patternLineSize(lineIndex)) {
                 let oneTile = line.pop() as string; // we know there's at least one tile at this point
                 Azul.wallOrdering[lineIndex].forEach((color, column) => {
                     if (color === oneTile) {
                         playerWall[lineIndex][column] = true;
                     }
                 })
-
                 playerPatternLines[lineIndex] = []
                 line.forEach(tile => this.state.discardPile.push(tile));
             }
         })
     }
+
+    private shouldEnd() {
+        let shouldEnd = false;
+        this.state.walls.forEach(wall => {
+            wall.forEach(row => {
+                // if there's a full horizontal line, game ends.
+                if (_.every(row)) shouldEnd = true;
+            })
+        })
+        return shouldEnd;
+    }
+
+    private end() {
+        throw new Error('Game ending not implemented.');
+    }
+
+    do(action: string) {
+        let move = Azul.parseMove(action);
+        this.pickTiles(move.from, move.toLine, move.color);
+    }
 }
 
 let az = Azul.createFromNumPlayers(2);
 let move = Azul.parseMove('2_BLACK_0');
-az.pickTiles(move.from, move.toLine, move.color);
-az.moveTilesToWall();
-console.log(az.state.patternLines)
-console.log(az.state.factories);
-console.log(az.state.center);
+az.do('2_BLACK_0');
+console.log(az.state);
+
 
 class Games {
     games: Game[];
