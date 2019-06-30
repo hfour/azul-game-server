@@ -30,14 +30,17 @@ function now() {
 }
 
 // Tile colors
-const BLACK = 'BLACK';
-const AQUA = 'AQUA';
-const BLUE = 'BLUE';
-const YELLOW = 'YELLOW';
-const RED = 'RED';
+const BLACK: TILE_COLOR = 'BLACK';
+const AQUA: TILE_COLOR  = 'AQUA';
+const BLUE: TILE_COLOR  = 'BLUE';
+const YELLOW: TILE_COLOR  = 'YELLOW';
+const RED: TILE_COLOR  = 'RED';
 
-interface AzulBoard {
-    bag: string[];
+type TILE_COLOR = 'BLACK' | 'AQUA' | 'BLUE' | 'YELLOW' | 'RED';
+
+interface AzulGameState {
+    currentPlayerIndex: number;
+    bag: string[]; // todo: change types to LINE_COLOR
     center: string[];
     factories: string[][];
     patternLines: string[][][];
@@ -45,7 +48,7 @@ interface AzulBoard {
     floorLines: [][];
 }
 
-interface GrabPlaceMove { from: number, color: string, toLine: number;  }
+interface GrabPlaceMove { from: number, color: TILE_COLOR, toLine: number;  }
 
 class Azul {
     static wallOrdering = [
@@ -56,7 +59,7 @@ class Azul {
         [YELLOW, RED, BLACK, AQUA, BLUE]
     ]
 
-    static newBoard(numPlayers: number): AzulBoard {
+    static newBoard(numPlayers: number): AzulGameState {
         let bag = Azul.newShuffledBag();
         let center: string[] = [];
         let factories: string[][] = [];
@@ -87,7 +90,7 @@ class Azul {
         })
         let floorLines: Array<[]> =_.times(numPlayers, () => [])
         return {
-            bag, center, factories, patternLines, walls, floorLines
+            currentPlayerIndex: 0, bag, center, factories, patternLines, walls, floorLines
         }
     }
 
@@ -114,17 +117,17 @@ class Azul {
         if (!_.range(0, 10).includes(fromN)) {
             throw new Error(`Parsing move error: from -> "${from}" is not a number between 0 and 9.`);
         }
-        if (![BLACK, AQUA, BLUE, YELLOW, RED].includes(color)) {
+        if (![BLACK, AQUA, BLUE, YELLOW, RED].includes(color as TILE_COLOR)) {
             throw new Error(`Parsing move error: color -> "${color}" is not one of ${BLACK}, ${AQUA}, ${BLUE}, ${YELLOW} or ${RED}.`);
         }
         if (!_.range(0, 5).includes(toLineN)) {
             throw new Error(`Parsing move error: toLine -> "${toLine}" is not a number between 0 and 4.`);
         }
         // todo: validate possible values for all three values
-        return { from: fromN, color, toLine: toLineN };
+        return { from: fromN, color: color as TILE_COLOR, toLine: toLineN };
     }
 
-    static createFromExistingBoard(board: AzulBoard): Azul {
+    static createFromExistingBoard(board: AzulGameState): Azul {
         return new Azul(board);
     }
 
@@ -132,11 +135,57 @@ class Azul {
         return new Azul(Azul.newBoard(numPlayers));
     }
 
-    constructor(public board: AzulBoard) {}
+    constructor(public state: AzulGameState) {}
+
+    private encureCanPlaceOnPatternLine(lineIndex: number, color: TILE_COLOR, numOfTiles: number, ) {
+        let playerIndex = this.state.currentPlayerIndex;
+        let patternLineSize = lineIndex + 1;
+        let line = this.state.patternLines[playerIndex][lineIndex]
+        let numFreeSpaces = patternLineSize - line.length;
+        if (numOfTiles > numFreeSpaces) {
+            throw new Error("There isn't enough free space on the line.");
+        }
+        let lineIsEmpty = patternLineSize === numFreeSpaces;
+        if (!lineIsEmpty && !_.includes(line, color)) {
+            throw new Error('There is already a tile of different color in the line.')
+        }
+    }
+
+    pickTiles(pileIndex: number, lineIndex: number, color: TILE_COLOR) {
+        let pile: string[];
+        let factoryIndex = pileIndex - 1;
+        if (pileIndex === 0) {
+            pile = _.clone(this.state.center);
+        } else {
+            pile = _.clone(this.state.factories[factoryIndex]);
+        }
+        if (!_.includes(pile, color)) {
+            throw new Error(`The selected pile doesn't contain the color "${color}".`);
+        }
+        let pileAfterPick: string[] = []
+        let pickedTiles: string[] = []
+        pile.forEach(tile => {
+            if (tile === color) pickedTiles.push(tile);
+            else pileAfterPick.push(tile);
+        })
+        this.encureCanPlaceOnPatternLine(lineIndex, color, pickedTiles.length);
+        // mutate center or factory
+        if (pileIndex === 0) {
+            this.state.center = pileAfterPick;
+        } else {
+            this.state.factories[factoryIndex] = pileAfterPick;
+        }
+        // mutate pattern line
+        let line = _.clone(this.state.patternLines[this.state.currentPlayerIndex][lineIndex]);
+        line = line.concat(pickedTiles);
+        this.state.patternLines[this.state.currentPlayerIndex][lineIndex] = line;
+    }
 }
 
 let az = Azul.createFromNumPlayers(2);
-console.log(Azul.parseMove('0_BLACK_4'));
+let move = Azul.parseMove('1_BLACK_4');
+az.pickTiles(move.from, move.toLine, move.color);
+console.log(az.state.patternLines)
 
 class Games {
     games: Game[];
@@ -331,6 +380,7 @@ app.get('/games/:gameId/move/:move', (req, res) => {
 
 app.get('/register', (req, res) => {
     let email = req.query.email;
+    if (!email) { throw new Error('No email provided.'); }
     let user = users.register(email); // includes secret
     res.json(user);
 })
